@@ -1,0 +1,2 @@
+EMAIL_RCPTS=''
+WD_EDITOR="/usr/bin/vim -c 'set nonu' -c 'set nornu'"

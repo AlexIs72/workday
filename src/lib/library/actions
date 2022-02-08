@@ -1,0 +1,85 @@
+#!/bin/sh
+
+BASE_DIR=~/.workday
+DATA_DIR=${BASE_DIR}/data
+
+if [ -f ~/.workdayrc ]; then
+    . ~/.workdayrc
+fi
+
+. ${BASE_DIR}/library/functions
+
+function usage() {
+    prg=$1
+    echo "Usage: $prg <timein|timeout|breaktime|status|report>"
+}
+
+function get_time_value() {
+    value=$(date +%s)
+    if [ ! -z "$*" ]; then
+        value=$(date -d"$*" +%s 2>/dev/null)
+    fi
+    echo $value
+}
+
+function timein() {
+#    echo "timein : $@"
+    timein_value=$(date +%s)
+    if [ ! -z "$*" ]; then
+        timein_value=$(date -d"$@" +%s 2>/dev/null)
+    fi
+    
+    current_dir="${BASE_DIR}/$(get_current_dir)"
+    
+    mkdir -p ${current_dir}
+    set_time_in ${current_dir} ${timein_value}
+    create_report ${current_dir}
+    send_email_from_template timein.txt "time in"
+}
+
+function timeout() {
+#    echo "timeout : $*"
+#    timeout_value=$(date +%s)
+#    if [ ! -z "$*" ]; then
+#        timeout_value=$(date -d"$*" +%s 2>/dev/null)
+#    fi
+    timeout_value=$(get_time_value "$*")
+    current_dir="${BASE_DIR}/$(get_current_dir)"
+    set_time_out ${current_dir} ${timeout_value}
+    send_email_from_template timeout.txt "time out"
+}
+
+function status() {
+    current_dir="${BASE_DIR}/$(get_current_dir)"
+    show_time_status ${current_dir}
+}
+
+function report() {
+    echo "report : $@"
+    current_dir="${BASE_DIR}/$(get_current_dir)"
+    do_edit_report ${current_dir}
+}
+
+function breaktime() {
+    break_in=$1
+    break_out=$2
+
+    echo "breaktime : $@"
+    
+    break_in=$(date -d"${break_in}" +%s 2>/dev/null)
+    break_out=$(date -d"${break_out}" +%s 2>/dev/null)
+    
+    if [ -z "${break_in}" -o -z "${break_out}" ]; then
+        echo "Incorrect break time format"
+        exit 1
+    fi    
+    
+    current_dir="${BASE_DIR}/$(get_current_dir)"
+    set_break_in ${current_dir} "${break_in}"
+    set_break_out ${current_dir} ${break_out}
+#    send_email_from_template break.txt "break time"
+}
+
+
+
+

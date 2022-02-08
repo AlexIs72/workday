@@ -1,0 +1,41 @@
+#!/bin/bash
+
+#if [ -f ~/.workdayrc ]; then
+#    . ~/.workdayrc
+#fi
+
+. ~/.workday/library/actions 
+
+
+if [ $# -eq 0 ]; then
+    usage $0
+    exit 1
+fi
+
+prg_name=$0
+action=$1
+
+if [ $# -ge 1 ]; then
+    shift    
+fi
+
+case ${action} in 
+    timein)
+        timein $@
+    ;;
+    timeout)
+        timeout $@
+    ;;
+    breaktime)
+        breaktime $@
+    ;;
+    status)
+        status $@
+    ;;
+    report)
+        report $@
+    ;;
+    *)
+        usage ${prg_name}
+    ;;
+esac

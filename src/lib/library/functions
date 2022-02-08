@@ -1,0 +1,191 @@
+#!/bin/sh
+
+DATA_DIR=data
+
+function get_db_table_name() {
+    echo "worktime"
+}
+
+function get_current_date_db_label() {
+    date +"%Y-%m-%d"
+}
+
+function get_current_dir() {
+    echo "${DATA_DIR}/"$(date +"%Y-%m")
+}
+
+function get_timedb_name() {
+    echo "times.db"
+}
+
+function get_report_name() {
+    echo $(date +"%Y-%m-%d")".md"
+}
+
+function create_db_if_not_exists() {
+#    dir=$1
+    db_path=$1
+#    "${dir}/"$(get_timedb_name)
+    
+    if [ ! -f ${db_path} ]; then
+#        touch ${db_path}
+        echo "CREATE table "$(get_db_table_name)" (
+            id integer primary key, 
+            dt datetime, 
+            time_in integer, 
+            break_in integer, 
+            break_out integer, 
+            time_out integer, 
+            break INT GENERATED ALWAYS AS (break_out-break_in) VIRTUAL,
+            result INT GENERATED ALWAYS AS (time_out-time_in-break) VIRTUAL,
+            lack INT GENERATED ALWAYS AS (result-28800) VIRTUAL
+            );" | sqlite3 ${db_path}
+             
+    fi
+    
+}
+
+function is_record_exists() {
+    label=$1
+}
+
+function set_time_in() {
+    current_dir=$1
+    time_in_value=$2
+    if [ -z "${time_in_value}" ]; then
+        echo "Invalid time in value"
+        exit 1
+    fi
+
+    db_path="${current_dir}/"$(get_timedb_name)  
+
+    create_db_if_not_exists ${db_path}
+    is_time_in=$(is_time_in_exists ${db_path})
+    
+    if [ -z "${is_time_in}" ]; then
+        echo "INSERT INTO "$(get_db_table_name)" (dt,time_in) \
+            VALUES('"$(get_current_date_db_label)"', ${time_in_value});" | sqlite3 ${db_path}
+    else
+        echo "UPDATE "$(get_db_table_name)" SET time_in="${time_in_value}" WHERE dt='"$(get_current_date_db_label)"'" | sqlite3 ${db_path}
+    fi
+    echo "time in: "$(date -d @${time_in_value} +"%H:%M")
+}
+
+function is_time_in_exists() {
+    db_path=$1
+    echo $(echo "SELECT time_in FROM "$(get_db_table_name)" WHERE dt='"$(get_current_date_db_label)"'" | sqlite3 ${db_path})
+}
+
+function set_break_in() {
+    current_dir=$1
+    break_in_value=$2
+    if [ -z "${break_in_value}" ]; then
+        echo "Invalid break in value"
+        exit 1
+    fi
+
+    db_path="${current_dir}/"$(get_timedb_name)  
+    
+    is_time_in=$(is_time_in_exists ${db_path})
+    
+    if [ -z "${is_time_in}" ]; then
+        echo "No time in today"
+    fi
+    
+    echo "UPDATE "$(get_db_table_name)" SET break_in=${break_in_value} WHERE dt='"$(get_current_date_db_label)"'" | sqlite3 ${db_path}
+
+    echo "break in: "$(date -d @${break_in_value} +"%H:%M")
+}
+
+function set_break_out() {
+    current_dir=$1
+    break_out_value=$2
+    if [ -z "${break_out_value}" ]; then
+        echo "Invalid break out value"
+        exit 1
+    fi
+
+    db_path="${current_dir}/"$(get_timedb_name)  
+    
+    is_time_in=$(is_time_in_exists ${db_path})
+    
+    if [ -z "${is_time_in}" ]; then
+        echo "No time in today"
+    fi
+
+    echo "UPDATE "$(get_db_table_name)" SET break_out=${break_out_value} WHERE dt='"$(get_current_date_db_label)"'" | sqlite3 ${db_path}
+
+    echo "break out: "$(date -d @${break_out_value} +"%H:%M")
+}
+
+function set_time_out() {
+    current_dir=$1
+    time_out_value=$2
+    if [ -z "${time_out_value}" ]; then
+        echo "Invalid time out value"
+        exit 1
+    fi
+
+    date_label=$(get_current_date_db_label)    
+    date_from_timeout=$(date -d"@${time_out_value}" +"%Y-%m-%d")
+
+    if [ "${date_from_timeout}" != "${date_label}" ]; then
+        date_label=${date_from_timeout}
+    fi
+
+    db_path="${current_dir}/"$(get_timedb_name)  
+
+    echo "UPDATE "$(get_db_table_name)" SET time_out=${time_out_value} WHERE dt='"${date_label}"'" | sqlite3 ${db_path}
+
+    echo "time out: "$(date -d @${time_out_value} +"%H:%M")
+}
+
+function create_report() {
+    dir=$1
+    touch "${dir}/"$(get_report_name)
+}
+
+function show_time_status() {
+    current_dir=$1
+    db_path="${current_dir}/"$(get_timedb_name)
+    
+    echo ""
+    echo "------------------------------------------------------------------------------------"
+    echo "SELECT dt,\
+            strftime('%H:%M', datetime(time_in, 'unixepoch', 'localtime')) as time_in,\
+            strftime('%H:%M', datetime(break_in, 'unixepoch', 'localtime')) as break_in,\
+            strftime('%H:%M', datetime(break_out, 'unixepoch', 'localtime')) as break_out,\
+            strftime('%H:%M', datetime(time_out, 'unixepoch', 'localtime')) as time_out, \
+            strftime('%H:%M', datetime(break, 'unixepoch')) as break, \
+            strftime('%H:%M', datetime(result, 'unixepoch')) as result, \
+            (case when lack < 0 then '-' else '' end) || \
+            strftime('%H:%M', datetime(abs(lack), 'unixepoch')) as lack \
+          FROM "$(get_db_table_name) | sqlite3 -markdown ${db_path}
+    echo "------------------------------------------------------------------------------------"
+#    echo "SELECT SUM(lack) as \"Total lack: \" FROM "$(get_db_table_name) | sqlite3 -line ${db_path}
+    lack=$(echo "SELECT SUM(lack) as '' FROM "$(get_db_table_name) | sqlite3 ${db_path})
+    lack_str=$(date -u -d@${lack#-} +"%H:%M:%S")
+    if [ ${lack} -lt 0 ]; then
+        lack_str="-${lack_str}"
+    fi
+    echo "Total lack: ${lack_str}"
+    echo ""
+    
+}
+
+function do_edit_report() {
+    current_dir=$1
+    report_path="${current_dir}/"$(get_report_name) 
+    eval "${WD_EDITOR} ${report_path}"
+}
+
+function send_email_from_template() {
+    template_name=$1
+    subject=$2
+    template_path=~/.workday/templates/${template_name}
+    cat ${template_path} | mutt -s "${subject}" "${EMAIL_RCPTS}"
+}
+
+#function get_lock_timein() {
+#    
+#}
