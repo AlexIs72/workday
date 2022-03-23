@@ -19,7 +19,9 @@ function get_timedb_name() {
 }
 
 function get_report_name() {
-    echo $(date +"%Y-%m-%d")".md"
+#    echo $(date +"%Y-%m-%d")".md"
+#    echo $(date +"%Y-%m")".md"
+    echo "report.md"
 }
 
 function create_db_if_not_exists() {
@@ -91,8 +93,16 @@ function set_break_in() {
     if [ -z "${is_time_in}" ]; then
         echo "No time in today"
     fi
+
+    date_label=$(get_current_date_db_label)    
+    date_from_timeout=$(date -d"@${break_in_value}" +"%Y-%m-%d")
+
+    if [ "${date_from_timeout}" != "${date_label}" ]; then
+        date_label=${date_from_timeout}
+    fi
+
     
-    echo "UPDATE "$(get_db_table_name)" SET break_in=${break_in_value} WHERE dt='"$(get_current_date_db_label)"'" | sqlite3 ${db_path}
+    echo "UPDATE "$(get_db_table_name)" SET break_in="${break_in_value}" WHERE dt='"${date_label}"'" | sqlite3 ${db_path}
 
     echo "break in: "$(date -d @${break_in_value} +"%H:%M")
 }
@@ -113,7 +123,14 @@ function set_break_out() {
         echo "No time in today"
     fi
 
-    echo "UPDATE "$(get_db_table_name)" SET break_out=${break_out_value} WHERE dt='"$(get_current_date_db_label)"'" | sqlite3 ${db_path}
+    date_label=$(get_current_date_db_label)    
+    date_from_timeout=$(date -d"@${break_out_value}" +"%Y-%m-%d")
+
+    if [ "${date_from_timeout}" != "${date_label}" ]; then
+        date_label=${date_from_timeout}
+    fi
+
+    echo "UPDATE "$(get_db_table_name)" SET break_out="${break_out_value}" WHERE dt='"${date_label}"'" | sqlite3 ${db_path}
 
     echo "break out: "$(date -d @${break_out_value} +"%H:%M")
 }
@@ -138,11 +155,28 @@ function set_time_out() {
     echo "UPDATE "$(get_db_table_name)" SET time_out=${time_out_value} WHERE dt='"${date_label}"'" | sqlite3 ${db_path}
 
     echo "time out: "$(date -d @${time_out_value} +"%H:%M")
+
+    report_path="${current_dir}/"$(get_report_name)
+    echo "--" >> ${report_path}
 }
 
 function create_report() {
     dir=$1
-    touch "${dir}/"$(get_report_name)
+    report_name="${dir}/"$(get_report_name)
+    touch ${report_name}
+#    echo "# "$(date +"%A, %b %d") >> ${report_name}
+cat << EOF >> ${report_name}
+
+## $(date +"%A, %b %d")
+
+Timings:
+
+    __TIME_IN__ - __TIME_OUT__ minus __BREAK_TIME__ for a break
+
+Results for today: 
+
+EOF
+    
 }
 
 function show_time_status() {
@@ -164,9 +198,12 @@ function show_time_status() {
     echo "------------------------------------------------------------------------------------"
 #    echo "SELECT SUM(lack) as \"Total lack: \" FROM "$(get_db_table_name) | sqlite3 -line ${db_path}
     lack=$(echo "SELECT SUM(lack) as '' FROM "$(get_db_table_name) | sqlite3 ${db_path})
-    lack_str=$(date -u -d@${lack#-} +"%H:%M:%S")
-    if [ ${lack} -lt 0 ]; then
-        lack_str="-${lack_str}"
+    lask_str=""
+    if [ ! -z "${lack}" ]; then
+        lack_str=$(date -u -d@${lack#-} +"%H:%M:%S")
+        if [ ${lack} -lt 0 ]; then
+            lack_str="-${lack_str}"
+        fi
     fi
     echo "Total lack: ${lack_str}"
     echo ""

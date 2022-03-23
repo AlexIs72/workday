@@ -62,12 +62,23 @@ function report() {
 
 function breaktime() {
     break_in=$1
+    if [ ! -z "$3" ]; then
+        break_in="$1 $2"
+    fi
     break_out=$2
+    if [ ! -z "$4" ]; then
+        break_out="$3 $4"
+    fi
 
     echo "breaktime : $@"
     
-    break_in=$(date -d"${break_in}" +%s 2>/dev/null)
-    break_out=$(date -d"${break_out}" +%s 2>/dev/null)
+#    echo "break_in = ${break_in}"
+#    echo "break_out = ${break_out}"
+    
+    break_in=$(get_time_value "${break_in}")
+#   $(date -d"${break_in}" +%s 2>/dev/null)
+    break_out=$(get_time_value "${break_out}")
+#   $(date -d"${break_out}" +%s 2>/dev/null)
     
     if [ -z "${break_in}" -o -z "${break_out}" ]; then
         echo "Incorrect break time format"
@@ -76,7 +87,7 @@ function breaktime() {
     
     current_dir="${BASE_DIR}/$(get_current_dir)"
     set_break_in ${current_dir} "${break_in}"
-    set_break_out ${current_dir} ${break_out}
+    set_break_out ${current_dir} "${break_out}"
 #    send_email_from_template break.txt "break time"
 }
 
